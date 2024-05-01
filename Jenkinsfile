@@ -2,71 +2,70 @@ pipeline {
     agent any
 
     environment {
-        
-        DOCKER_REGISTRY = "ton_registry"
-        DOCKER_IMAGE_NAME = "ton_image"
-        DOCKER_REGISTRY_CREDENTIALS_ID = "ton_id_de_credentials"
+        ID_DOCKER = "${ID_DOCKER_PARAMS}"
+        IMAGE_NAME = "website-karma-tp"
+        IMAGE_TAG = "latest"
+        DOCKERHUB_PASSWORD = "${DOCKERHUB_PASSWORD_PARAMS}"
+        RENDER_API_TOKEN = credentials('RENDER_APIKEY')
+        RENDER_SERVICE_ID = "srv-copbcoen7f5s73b3dup0"
+        RENDER_DEPLOY_HOOK_URL = credentials('RENDER_DEPLOY_HOOK_URL')
+    }
+
+    triggers {
+        // check every 5min
+        pollSCM('H/5 * * * *')
     }
 
     stages {
-        stage('Build') {
+        stage('Build image') {
             steps {
-                
-                echo 'Lancement du build...'
-                sh 'mvn clean package'
-            }
-        }
-
-        stage('Test') {
-            steps {
-                
-                echo 'Lancement des tests...'
-                sh 'mvn test'
-            }
-        }
-
-        stage('Build Docker Image') {
-            steps {
-                
-                echo 'Construction de l\'image Docker...'
-                sh 'docker build -t $DOCKER_REGISTRY/$DOCKER_IMAGE_NAME .'
-            }
-        }
-
-        stage('Push Image to Registry') {
-            steps {
-                
-                echo 'Envoi de l\'image Docker vers le registre...'
                 script {
-                    docker.withRegistry('https://$DOCKER_REGISTRY', DOCKER_REGISTRY_CREDENTIALS_ID) {
-                        def appImage = docker.build("$DOCKER_REGISTRY/$DOCKER_IMAGE_NAME")
-                        appImage.push()
+                    sh 'docker build -t ${ID_DOCKER}/${IMAGE_NAME}:${IMAGE_TAG} .'
+                }
+            }
+        }
+
+        stage('Test image') {
+            steps {
+                script {
+                    echo "Exécution des tests"
+                }
+            }
+        }
+
+        stage('Login and Push Image on docker hub') {
+            steps {
+                script {
+                    sh '''
+                        echo ${DOCKERHUB_PASSWORD} | docker login -u ${ID_DOCKER} --password-stdin
+                        docker push ${ID_DOCKER}/${IMAGE_NAME}:${IMAGE_TAG}
+                    '''
+                }
+            }
+        }
+
+        stage('Trigger Deploy to Render') {
+            steps {
+                withCredentials([string(credentialsId: 'RENDER_DEPLOY_HOOK_URL', variable: 'DEPLOY_HOOK_URL')]) {
+                    script {
+                        sh "curl -X POST ${DEPLOY_HOOK_URL}"
                     }
                 }
             }
         }
 
-        stage('Deploy') {
-            steps {
-                
-                echo 'Déploiement de l\'application...'
-                
-            }
-        }
     }
 
     post {
-        
         success {
-            mail to: 'notif-jenkins@joelkoussawo.me',
-                 subject: "Succès du Pipeline: ${env.JOB_NAME}",
-                 body: "Le pipeline ${env.JOB_NAME} a réussi."
+            mail to: 'markus.gapaz@gmail.com', // notif-jenkins@joelkoussawo.me
+                 subject: "Succès du Pipeline ${env.JOB_NAME} ${env.BUILD_NUMBER}",
+                 body: "Le pipeline a réussi. L'application a été déployée sur Render."
         }
         failure {
-            mail to: 'notif-jenkins@joelkoussawo.me',
-                 subject: "Échec du Pipeline: ${env.JOB_NAME}",
-                 body: "Le pipeline ${env.JOB_NAME} a échoué."
+            mail to: 'markus.gapaz@gmail.com', // notif-jenkins@joelkoussawo.me
+                 subject: "Échec du Pipeline ${env.JOB_NAME} ${env.BUILD_NUMBER}",
+                 body: "Le pipeline a échoué. Veuillez vérifier Jenkins pour plus de détails."
         }
     }
 }
-
