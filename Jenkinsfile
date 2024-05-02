@@ -12,8 +12,7 @@ pipeline {
     }
 
     triggers {
-        // check every 5min
-        pollSCM('H/5 * * * *')
+        pollSCM('H/5 * * * *') // check every 5 minutes
     }
 
     stages {
@@ -37,8 +36,8 @@ pipeline {
             steps {
                 script {
                     sh '''
-                        echo ${DOCKERHUB_PASSWORD} | docker login -u ${ID_DOCKER} --password-stdin
-                        docker push ${ID_DOCKER}/${IMAGE_NAME}:${IMAGE_TAG}
+                        echo ${DOCKERHUB_PASSWORD} | docker login -u ${ID_DOCKER} --password-stdin // Login to Docker Hub
+                        docker push ${ID_DOCKER}/${IMAGE_NAME}:${IMAGE_TAG} // Push Docker image to Docker Hub
                     '''
                 }
             }
